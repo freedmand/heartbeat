@@ -1,8 +1,65 @@
 import { useEffect, useState } from "react";
 import { SectionList, Text, TouchableOpacity, View } from "react-native";
-import { Device } from "react-native-ble-plx";
-import { bleManager, hrService } from "../ble";
+import { BleError, Characteristic, Device } from "react-native-ble-plx";
+import { bleManager, hrService, parseHr } from "../ble";
 import { styles } from "../styles";
+
+const useFakeDevice = true;
+
+let interval: ReturnType<typeof setInterval> | null = null;
+const fakeDevice: Device = {
+  id: "fake-device",
+  name: "Fake Device 🎢",
+  connect: async () => fakeDevice,
+  discoverAllServicesAndCharacteristics: async () => fakeDevice,
+  cancelConnection: () => {
+    if (interval != null) {
+      clearInterval(interval);
+      interval = null;
+    }
+  },
+  monitorCharacteristicForService: (
+    _service: any,
+    _characteristic: any,
+    callback: (
+      error: BleError | null,
+      characteristic: Characteristic | null
+    ) => void
+  ) => {
+    const minHeartBeat = 80;
+    const maxHeartBeat = 185;
+    let currentHeartBeat = 80;
+    let direction = 3;
+    const randomAmount = 2;
+
+    if (interval != null) {
+      clearInterval(interval);
+      interval = null;
+    }
+
+    interval = setInterval(() => {
+      currentHeartBeat += direction;
+      currentHeartBeat +=
+        Math.floor(Math.random() * (randomAmount * 2 + 1)) - randomAmount;
+      if (currentHeartBeat >= maxHeartBeat) {
+        currentHeartBeat = maxHeartBeat;
+        direction *= -1;
+      } else if (currentHeartBeat <= minHeartBeat) {
+        currentHeartBeat = minHeartBeat;
+        direction *= -1;
+      }
+      (callback as any)(null, {
+        heartBeat: {
+          heartRate: currentHeartBeat,
+          contactDetected: false,
+          energyExpended: null,
+          rrIntervalPresent: false,
+          rrIntervals: [],
+        },
+      } as { heartBeat: ReturnType<typeof parseHr> });
+    }, 1000);
+  },
+} as any as Device;
 
 interface BluetoothItemProps {
   device: Device;
@@ -27,6 +84,8 @@ export const BluetoothSelect = ({
   setSelectedDevice,
 }: BluetoothSelectProps) => {
   const [devices, setDevices] = useState<Device[]>([]);
+
+  const allDevices = useFakeDevice ? [...devices, fakeDevice] : devices;
 
   const setDevice = (device: Device) => {
     // Function to set device right before passing to parent callback
@@ -73,7 +132,7 @@ export const BluetoothSelect = ({
       sections={[
         {
           title: "Heart rate monitors",
-          data: devices,
+          data: allDevices,
         },
       ]}
       renderItem={({ item }) => (
